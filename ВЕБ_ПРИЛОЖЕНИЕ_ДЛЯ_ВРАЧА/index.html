@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>СимургФарм · Экспресс-расчёт дозы Экзампломицина</title>
+  
+  <!-- Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Fullscreen Canvas for Confetti -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- Global Toast Notification -->
+  <div id="appToast" class="app-toast">
+    <span class="toast-icon">✓</span>
+    <span id="toastMessage" class="toast-text">Сохранено</span>
+  </div>
+
+  <!-- Minimalist Clinical Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="header-logo-badge">
+        <span class="logo-pulse-dot"></span>
+        <span class="logo-icon">💊</span>
+      </div>
+      <div class="header-titles">
+        <div class="header-title-row">
+          <h1>Экзампломицин · Клинический дозатор</h1>
+          <span class="header-tag">СППР ВРАЧА</span>
+        </div>
+        <p>Персонализированный подбор безопасной дозы антибиотика по 6 ключевым показателям</p>
+      </div>
+    </div>
+
+    <!-- Quick Clinical Presets (1-Click for Doctor) -->
+    <div class="header-center">
+      <div class="preset-pills-row">
+        <span class="preset-label-quick">Шаблоны:</span>
+        <button class="preset-chip active" onclick="loadPresetQuick(0)" title="Типовой пациент ОРИТ из слайда 12">
+          👨‍⚕️ Слайд 12 (65 лет, сепсис)
+        </button>
+        <button class="preset-chip" onclick="loadPresetQuick(1)" title="Тяжелый септический шок с гипоальбуминемией">
+          🚨 Септический шок
+        </button>
+        <button class="preset-chip" onclick="loadPresetQuick(3)" title="Пожилой пациент с почечной недостаточностью">
+          👵 ХБП (Креатинин 160)
+        </button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- Sound Synthesizer Toggle -->
+      <button id="soundToggleBtn" class="header-tool-btn" title="Звуковой отклик (Web Audio API)">
+        <span id="soundIcon">🔊</span>
+      </button>
+
+      <!-- Theme Switcher (Dark / Light) -->
+      <button id="themeToggleBtn" class="header-tool-btn" title="Сменить тему (Светлая / Тёмная)">
+        <span id="themeIcon">☀️</span>
+      </button>
+
+      <!-- Quick Help -->
+      <button class="header-tool-btn" title="Краткая инструкция врача" onclick="openModal('help-modal')">
+        <span>❔</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Minimalist Workspace: 2-Column Split -->
+  <main class="minimal-layout">
+    
+    <!-- LEFT COLUMN: The 6 Golden Criteria (and nothing extra) -->
+    <section class="minimal-card card-inputs">
+      <div class="card-glass-header">
+        <div class="header-title-group">
+          <span class="header-icon-badge">📋</span>
+          <h2>1. Показатели пациента (6 параметров)</h2>
+        </div>
+        <span class="badge-status-neutral">Шаг 1 из 2</span>
+      </div>
+
+      <div class="minimal-form-body">
+        
+        <!-- Parameter 1: Weight -->
+        <div class="param-box">
+          <div class="param-head">
+            <label for="inp-weight" class="param-label">
+              <span class="param-num">1</span> Вес пациента
+            </label>
+            <span class="param-subhint">Определяет объем распределения Vd</span>
+          </div>
+          <div class="param-input-wrap">
+            <input type="number" id="inp-weight" class="minimal-input" value="78.0" step="0.5" min="30" max="250">
+            <span class="param-unit">кг</span>
+          </div>
+        </div>
+
+        <!-- Parameter 2: Age -->
+        <div class="param-box">
+          <div class="param-head">
+            <label for="inp-age" class="param-label">
+              <span class="param-num">2</span> Возраст
+            </label>
+            <span class="param-subhint">Влияет на физиологический клиренс</span>
+          </div>
+          <div class="param-input-wrap">
+            <input type="number" id="inp-age" class="minimal-input" value="65" min="18" max="100">
+            <span class="param-unit">лет</span>
+          </div>
+        </div>
+
+        <!-- Parameter 3: Serum Creatinine -->
+        <div class="param-box">
+          <div class="param-head">
+            <label for="inp-scr" class="param-label">
+              <span class="param-num">3</span> Креатинин крови
+            </label>
+            <span class="param-subhint">Биохимия (норма: 60–110 мкмоль/л)</span>
+          </div>
+          <div class="param-input-wrap">
+            <input type="number" id="inp-scr" class="minimal-input" value="52" min="20" max="800">
+            <span class="param-unit">мкмоль/л</span>
+          </div>
+        </div>
+
+        <!-- Parameter 4: Sepsis Status (Large Toggle Switch) -->
+        <div class="param-box">
+          <div class="param-head">
+            <label class="param-label">
+              <span class="param-num">4</span> Наличие сепсиса
+            </label>
+            <span class="param-subhint">При сепсисе Vd увеличивается на +25%</span>
+          </div>
+          <div class="toggle-segmented-group" id="group-sepsis">
+            <button type="button" class="segment-btn active" id="btn-sepsis-yes" onclick="setSepsis(1)">
+              🚨 ДА, Сепсис
+            </button>
+            <button type="button" class="segment-btn" id="btn-sepsis-no" onclick="setSepsis(0)">
+              ✓ Нет сепсиса
+            </button>
+            <input type="hidden" id="inp-sepsis" value="1">
+          </div>
+        </div>
+
+        <!-- Parameter 5: Albumin -->
+        <div class="param-box">
+          <div class="param-head">
+            <label for="inp-albumin" class="param-label">
+              <span class="param-num">5</span> Альбумин крови
+            </label>
+            <span class="param-subhint">Норма: 35–50 г/л (гипоальбуминемия &lt; 30)</span>
+          </div>
+          <div class="param-input-wrap">
+            <input type="number" id="inp-albumin" class="minimal-input" value="28" min="10" max="60">
+            <span class="param-unit">г/л</span>
+          </div>
+        </div>
+
+        <!-- Parameter 6: OAT Transporter Gene Variant -->
+        <div class="param-box">
+          <div class="param-head">
+            <label class="param-label">
+              <span class="param-num">6</span> Ген OAT1/3 (почки)
+            </label>
+            <span class="param-subhint">Если анализ не проводился — оставьте «Обычный»</span>
+          </div>
+          <div class="toggle-segmented-group oat-group" id="group-oat">
+            <button type="button" class="segment-btn active" id="btn-oat-normal" onclick="setOat('Normal')">
+              Обычный (95% людей)
+            </button>
+            <button type="button" class="segment-btn" id="btn-oat-slow" onclick="setOat('Slow')">
+              Замедленный (-32%)
+            </button>
+            <button type="button" class="segment-btn" id="btn-oat-rapid" onclick="setOat('Rapid')">
+              Ускоренный (+37%)
+            </button>
+            <input type="hidden" id="inp-oat" value="Normal">
+          </div>
+        </div>
+
+        <!-- Small Helpful Renal Status Banner for the Doctor -->
+        <div class="calc-micro-strip">
+          <div class="micro-stat">
+            <span class="micro-label">Расчетная СКФ:</span>
+            <strong id="disp-crcl" class="micro-val">108 мл/мин</strong>
+            <span class="micro-tag text-success">Нормальная функция</span>
+          </div>
+          <div class="micro-stat">
+            <span class="micro-label">ИМТ:</span>
+            <strong id="disp-bmi" class="micro-val">25.2</strong> кг/м²
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Clear Medical Recommendation & Safety -->
+    <section class="minimal-card card-output">
+      <div class="card-glass-header">
+        <div class="header-title-group">
+          <span class="header-icon-badge">💉</span>
+          <h2>2. Назначение для врача</h2>
+        </div>
+        <span class="badge-status-success" id="mainStatusBadge">Готово к введению</span>
+      </div>
+
+      <div class="minimal-output-body">
+        
+        <!-- Big Hero Prescription Card -->
+        <div class="hero-prescription-box" id="heroPrescription">
+          <div class="hero-top-tag">
+            <span class="hero-pulse-dot"></span>
+            <span>РЕКОМЕНДУЕМАЯ РАЗОВАЯ ДОЗА:</span>
+          </div>
+
+          <div class="hero-dose-number">
+            <span id="heroDoseVal">560</span>
+            <span class="hero-dose-unit">мг</span>
+            <span class="hero-dose-gram">(<span id="heroDoseG">0.56</span> г)</span>
+          </div>
+
+          <!-- Administration Instructions for Nurse/Doctor -->
+          <div class="hero-nurse-instruction">
+            <span class="instruction-icon">📋</span>
+            <div class="instruction-text">
+              <strong>Схема введения:</strong> внутривенно капельно в <strong>100 мл 0.9% NaCl</strong> в течение <strong>30 минут</strong>, 1 раз в сутки.
+            </div>
+          </div>
+        </div>
+
+        <!-- Safety Traffic Light (Светофор безопасности) -->
+        <div class="safety-card" id="safetyCard">
+          <div class="safety-header">
+            <div class="traffic-light-pill success" id="trafficPill">
+              <span class="traffic-gem">✓</span>
+              <strong id="trafficTitle">Безопасно для пациента</strong>
+            </div>
+            <div class="pta-badge">
+              <span>Эффективность (PTA):</span>
+              <strong id="disp-pta">95%</strong>
+            </div>
+          </div>
+
+          <!-- Micro Checklist for Safety -->
+          <div class="safety-points-grid">
+            <div class="safety-point" id="pt-peak">
+              <span class="point-icon">✓</span>
+              <div class="point-info">
+                <strong>Пик C(0.5): <span id="disp-peak">20.5</span> мг/л</strong>
+                <span class="point-sub">Безопасный предел: ≤ 26.0 мг/л</span>
+              </div>
+            </div>
+            <div class="safety-point" id="pt-avg">
+              <span class="point-icon">✓</span>
+              <div class="point-info">
+                <strong>Средняя C̄: <span id="disp-cavg">16.1</span> мг/л</strong>
+                <span class="point-sub">Терапевтическое окно: 6.0 – 26.0 мг/л</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Alert Banner (Hidden by default, shown if doctor sets toxic dose) -->
+          <div class="danger-alert-box" id="dangerAlert" style="display: none;">
+            <span class="danger-glyph">⚠️</span>
+            <div class="danger-text">
+              <strong>ВНИМАНИЕ: Превышен порог безопасности!</strong>
+              <p>При такой дозе пиковая концентрация превышает 26.0 мг/л. Высокий риск острой нефротоксичности.</p>
+              <button type="button" class="glow-btn glow-btn-sm" onclick="applyRecommendedDose()">
+                ↩️ Вернуть безопасную дозу (<span id="btnRecDoseText">560</span> мг)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Minimalist Dose Fine-Tuning Slider (For Experienced Doctor) -->
+        <div class="dose-slider-compact">
+          <div class="slider-header-row">
+            <span class="slider-title">Ручная корректировка дозы:</span>
+            <div class="slider-input-sync">
+              <input type="number" id="inp-custom-dose" class="sync-input" value="560" step="10" min="100" max="1500">
+              <span class="sync-unit">мг</span>
+            </div>
+          </div>
+          <input type="range" id="slider-dose" class="custom-range-slider" min="150" max="1200" step="10" value="560">
+          <div class="slider-marks">
+            <span>200 мг</span>
+            <span>400 мг</span>
+            <span>600 мг</span>
+            <span>800 мг</span>
+            <span>1000 мг</span>
+          </div>
+        </div>
+
+        <!-- Optional 24h Pharmacokinetic Curve (Accordion) -->
+        <details class="curve-details-accordion">
+          <summary class="curve-summary" onclick="setTimeout(resizeCanvasOnAccordion, 60)">
+            <span class="summary-arrow">▶</span> График концентрации в крови (24 часа)
+          </summary>
+          <div class="curve-canvas-box">
+            <div class="canvas-stage-wrapper" id="chartStageWrap">
+              <canvas id="pkCanvas" width="550" height="180"></canvas>
+              <div id="chartTooltip" class="chart-floating-tooltip"></div>
+            </div>
+            <div class="curve-legend-mini">
+              <span><span class="dot-blue"></span> Концентрация</span>
+              <span><span class="dot-green"></span> Окно (6–26 мг/л)</span>
+              <span><span class="dot-red"></span> Порог пика 26 мг/л</span>
+            </div>
+          </div>
+        </details>
+
+        <!-- Big Primary Action Button: Print Clinical Sheet -->
+        <div class="action-bar-hero">
+          <button class="glow-btn glow-btn-primary glow-btn-lg" onclick="openReportModal()">
+            <span class="btn-glyph">🖨️</span> Распечатать назначение в историю болезни (A4)
+          </button>
+          <button class="glow-btn glow-btn-secondary" onclick="savePrescriptionScheme()">
+            <span class="btn-glyph">💾</span> Сохранить
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: Official Medical Prescription Sheet (A4)
+       ========================================== -->
+  <dialog id="report-modal" class="custom-modal-dialog">
+    <div class="modal-box-card">
+      <div class="modal-header-glass">
+        <div class="modal-title-wrap">
+          <span class="modal-icon-badge">📑</span>
+          <h3>Лист назначения антибактериальной терапии</h3>
+        </div>
+        <button class="modal-close-icon" onclick="closeModal('report-modal')" aria-label="Закрыть">×</button>
+      </div>
+
+      <div class="modal-body-scrollable printable-document" id="printable-report">
+        
+        <div class="doc-header-box">
+          <div class="doc-hospital-label">СИМУРГФАРМ · КЛИНИЧЕСКАЯ БОЛЬНИЦА · ОТДЕЛЕНИЕ РЕАНИМАЦИИ И ИНТЕНСИВНОЙ ТЕРАПИИ</div>
+          <div class="doc-title-main">ЛИСТ ПЕРСОНАЛИЗИРОВАННОГО НАЗНАЧЕНИЯ ЭКЗАМПЛОМИЦИНА</div>
+          <div class="doc-meta-info" id="rep-date">Дата: 21 ноября 2026 г. | Карта стационарного больного № PAT_7421</div>
+        </div>
+
+        <table class="protocol-table">
+          <tr>
+            <th colspan="4">1. Ключевые клинические показатели пациента</th>
+          </tr>
+          <tr>
+            <td>Вес пациента:</td>
+            <td><strong id="rep-wt">78.0 кг</strong></td>
+            <td>Возраст:</td>
+            <td><strong id="rep-age">65 лет</strong></td>
+          </tr>
+          <tr>
+            <td>Креатинин сыворотки:</td>
+            <td><strong id="rep-scr">52 мкмоль/л</strong></td>
+            <td>Расчетная СКФ:</td>
+            <td><strong id="rep-crcl">108 мл/мин</strong></td>
+          </tr>
+          <tr>
+            <td>Альбумин крови:</td>
+            <td><strong id="rep-alb">28 г/л</strong></td>
+            <td>Статус сепсиса:</td>
+            <td><strong id="rep-sepsis">Да (Сепсис)</strong></td>
+          </tr>
+          <tr>
+            <td>Ген OAT1/3:</td>
+            <td><strong id="rep-oat">Normal (Стандартный)</strong></td>
+            <td>Препарат:</td>
+            <td><strong>Экзампломицин (Examplomycin)</strong></td>
+          </tr>
+        </table>
+
+        <div class="protocol-prescription-card">
+          <div class="doc-rec-badge">НАЗНАЧЕНИЕ:</div>
+          <div class="doc-rec-dose" id="rep-final-dose">Экзампломицин 560 мг внутривенно, 1 раз в сутки</div>
+          <div class="doc-rec-sub" id="rep-details">
+            Способ введения: флакон развести в 100 мл 0.9% раствора натрия хлорида. Вводить внутривенно капельно в течение 30 минут.<br>
+            Ожидаемый пик C(0.5): 20.5 мг/л (предел безопасности ≤ 26.0 мг/л). Средняя концентрация: 16.1 мг/л (в окне 6.0–26.0 мг/л).
+          </div>
+        </div>
+
+        <div class="protocol-signatures">
+          <div class="sig-block">Лечащий врач: ____________________ / ____________________ /</div>
+          <div class="sig-block">Зав. отделением / Фармаколог: ____________________ / ____________________ /</div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer-glass">
+        <button class="glow-btn glow-btn-primary" onclick="printReportDocument()">🖨️ Распечатать на принтере (A4)</button>
+        <button class="glow-btn glow-btn-secondary" onclick="closeModal('report-modal')">Закрыть</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ==========================================
+       MODAL: Doctor Quick Guide
+       ========================================== -->
+  <dialog id="help-modal" class="custom-modal-dialog">
+    <div class="modal-box-card">
+      <div class="modal-header-glass">
+        <div class="modal-title-wrap">
+          <span class="modal-icon-badge">❔</span>
+          <h3>Краткая инструкция для дежурного врача</h3>
+        </div>
+        <button class="modal-close-icon" onclick="closeModal('help-modal')">×</button>
+      </div>
+      <div class="modal-body-scrollable modal-reading-body">
+        <h4>Как пользоваться калькулятором (за 30 секунд):</h4>
+        <ol class="styled-list">
+          <li><strong>Введите 6 показателей больного:</strong> вес, возраст, креатинин из биохимии, наличие сепсиса, альбумин и тип гена OAT (если тест не делался — оставьте «Обычный»).</li>
+          <li><strong>Посмотрите на карточку «Назначение»:</strong> программа сразу выдает точную рекомендуемую дозу в миллиграммах и граммах.</li>
+          <li><strong>Проверьте «Светофор безопасности»:</strong> зеленый щит означает, что доза эффективна и не повредит почки.</li>
+          <li><strong>Нажмите «Распечатать»:</strong> сформируется официальный лист назначения для вклейки в историю болезни.</li>
+        </ol>
+      </div>
+      <div class="modal-footer-glass">
+        <button class="glow-btn glow-btn-secondary" onclick="closeModal('help-modal')">Понятно</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Hidden legacy fields for background model compatibility -->
+  <div style="display: none;">
+    <input type="hidden" id="inp-sex" value="M">
+    <input type="hidden" id="inp-height" value="176">
+    <input type="hidden" id="inp-infection" value="Нозокомиальная пневмония (ВАП)">
+    <input type="hidden" id="inp-pathogen" value="Pseudomonas aeruginosa">
+    <input type="hidden" id="inp-mic" value="2.0">
+    <input type="hidden" id="inp-crp" value="54">
+    <input type="hidden" id="inp-lactate" value="2.1">
+    <input type="hidden" id="inp-race" value="White">
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
